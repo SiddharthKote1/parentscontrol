@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.igurus.v02.ReelsBlockingService.MainViewModel
 import com.igurus.v02.timelimit.AppLimits
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import com.igurus.v02.ReelsBlockingService.BedtimeBlock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,10 +34,14 @@ import kotlinx.coroutines.withContext
 fun AppLimitsScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // val bedtimeBlocks by viewModel.bedtimeBlocks.collectAsState(initial = emptyList())
+
 
     val appTimeLimits by viewModel.getAppTimeLimits().collectAsState(initial = emptyMap())
     val permanentlyBlockedApps by viewModel.permanentlyBlockedApps.collectAsState(initial = emptySet())
     val blockedCategories by viewModel.blockedCategories.collectAsState(initial = emptySet())
+    val bedtimeBlocks by viewModel.bedtimeBlocks.collectAsState()
+
 
     var limitedApps by remember { mutableStateOf<List<LimitedAppItem>>(emptyList()) }
     var blockedApps by remember { mutableStateOf<List<BlockedAppItem>>(emptyList()) }
@@ -62,10 +68,7 @@ fun AppLimitsScreen(viewModel: MainViewModel) {
 
         when {
             isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
@@ -73,9 +76,7 @@ fun AppLimitsScreen(viewModel: MainViewModel) {
             limitedApps.isEmpty() && blockedApps.isEmpty() && blockedCategories.isEmpty() -> {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
@@ -123,6 +124,27 @@ fun AppLimitsScreen(viewModel: MainViewModel) {
                         }
                     }
 
+                    if (bedtimeBlocks.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Bedtime Blocks",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                        items(bedtimeBlocks) { block ->
+                            BedtimeBlockItem(
+                                block = block,
+                                onRemove = {
+                                    scope.launch {
+                                        viewModel.removeBedtimeBlock(block) // pass object instead of index
+                                    }
+                                }
+                            )
+                        }
+                    }
+
                     // ✅ Time-Limited Apps Section
                     if (limitedApps.isNotEmpty()) {
                         item {
@@ -138,7 +160,7 @@ fun AppLimitsScreen(viewModel: MainViewModel) {
                                 limitedApp = limitedApp,
                                 onRemoveLimit = {
                                     scope.launch {
-                                        viewModel.setAppTimeLimit(limitedApp.packageName, 0)
+                                        viewModel.removeAppTimeLimit(limitedApp.packageName)
                                     }
                                 }
                             )
@@ -282,6 +304,83 @@ fun LimitedAppItem(
         )
     }
 }
+@Composable
+fun BedtimeBlockItem(
+    block: BedtimeBlock,
+    onRemove: () -> Unit
+) {
+    val context = LocalContext.current
+    val packageManager = context.packageManager
+
+    // Resolve app name and icon
+    val appName = remember(block.packageName) {
+        try {
+            val appInfo = packageManager.getApplicationInfo(block.packageName, 0)
+            packageManager.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            block.packageName // fallback if app not found
+        }
+    }
+
+    val appIcon = remember(block.packageName) {
+        try {
+            val appInfo = packageManager.getApplicationInfo(block.packageName, 0)
+            packageManager.getApplicationIcon(appInfo)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (appIcon != null) {
+                    Image(
+                        painter = rememberDrawablePainter(appIcon),
+                        contentDescription = appName,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                Column {
+                    Text(
+                        text = if (block.packageName.isEmpty()) "All Apps" else appName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = "${formatTime(block.startHour, block.startMinute)} - ${formatTime(block.endHour, block.endMinute)}",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Default.Delete, contentDescription = "Remove")
+            }
+        }
+    }
+}
+
+private fun formatTime(hour: Int, minute: Int): String {
+    val h = hour % 24
+    val m = minute % 60
+    return String.format("%02d:%02d", h, m)
+}
+
 
 @Composable
 fun BlockedAppItem(blockedApp: BlockedAppItem, onUnblock: () -> Unit) {
@@ -457,3 +556,4 @@ private suspend fun loadBlockedApps(
         }
     }.sortedBy { it.appName }
 }
+

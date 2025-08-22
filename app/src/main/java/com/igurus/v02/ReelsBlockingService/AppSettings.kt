@@ -37,8 +37,21 @@ data class AppSettings(
     val parentBedtimeEnd: String = "",
 
     // ✅ NEW Parent multiple bedtime blocks
-    val bedtimeBlocks: List<BedtimeBlock> = emptyList()
-)
+    val bedtimeBlocks: List<BedtimeBlock> = emptyList(),
+
+    // ✅ Added app version for future migrations
+    val version: Int = 1
+) {
+    companion object {
+        // Default instance to avoid nulls in DataStore
+        fun default() = AppSettings()
+    }
+
+    // ✅ Helper: Get currently active child profile
+    fun getActiveChild(): ChildProfile? {
+        return childProfiles.find { it.id == activeChildId }
+    }
+}
 
 @Serializable
 data class ChildProfile(
@@ -71,11 +84,6 @@ data class ChildProfile(
     val blockedWebsites: List<String> = emptyList()
 )
 
-@Serializable
-data class BedtimeBlock(
-    val start: String = "", // e.g., "22:00"
-    val end: String = ""    // e.g., "07:00"
-)
 
 @Serializable
 data class App(
@@ -127,3 +135,13 @@ data class BlockedKeywordLists(
     val drug: Boolean = false,
     val scam: Boolean = false
 )
+
+@Serializable
+data class BedtimeBlock(
+    val packageName: String = "",
+    val startHour: Int = 0,
+    val startMinute: Int = 0,
+    val endHour: Int = 0,
+    val endMinute: Int = 0
+)
+

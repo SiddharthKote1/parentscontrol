@@ -19,6 +19,7 @@ class DataStoreManager(private val context: Context) {
     private val dataStore: DataStore<AppSettings> = context.appSettingsDataStore
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+
     val appSettings: StateFlow<AppSettings> = dataStore.data
         .catch { emit(AppSettings()) }
         .stateIn(scope, SharingStarted.Eagerly, AppSettings())
@@ -169,6 +170,86 @@ class DataStoreManager(private val context: Context) {
     }
 
 
+    suspend fun setParentBedtimeBlocks(blocks: List<BedtimeBlock>) {
+        dataStore.updateData { settings ->
+            settings.copy(bedtimeBlocks = blocks)
+        }
+    }
+
+
+    // ✅ Update Blocked Apps for Parent
+    suspend fun setParentBlockedApps(blocked: Map<String, App>) {
+        dataStore.updateData { settings ->
+            settings.copy(blockedApps = blocked)
+        }
+    }
+
+    // ✅ Update Blocked Apps for Child
+    suspend fun setChildBlockedApps(childId: String, blocked: Map<String, App>) {
+        dataStore.updateData { settings ->
+            val updatedChildren = settings.childProfiles.map {
+                if (it.id == childId) it.copy(blockedApps = blocked) else it
+            }
+            settings.copy(childProfiles = updatedChildren)
+        }
+    }
+
+    // ✅ Update Active Child ID
+    suspend fun setActiveChildId(childId: String) {
+        dataStore.updateData { settings ->
+            settings.copy(activeChildId = childId)
+        }
+    }
+
+    // ------------------- BEDTIME BLOCK MANAGEMENT -------------------
+
+    suspend fun addBedtimeBlock(
+        packageName: String,
+        startHour: Int,
+        startMinute: Int,
+        endHour: Int,
+        endMinute: Int
+    ) {
+        val newBlock = BedtimeBlock(
+            packageName = packageName,
+            startHour = startHour,
+            startMinute = startMinute,
+            endHour = endHour,
+            endMinute = endMinute
+        )
+
+        if (appSettings.value.accountMode == "Parent") {
+            val updated = appSettings.value.bedtimeBlocks + newBlock
+            saveSettings { it.copy(bedtimeBlocks = updated) }
+        } else {
+            updateActiveChild { child ->
+                val updated = child.bedtimeBlocks + newBlock
+                child.copy(bedtimeBlocks = updated)
+            }
+        }
+    }
+
+
+    suspend fun removeBedtimeBlock(block: BedtimeBlock) {
+        if (appSettings.value.accountMode == "Parent") {
+            val updated = appSettings.value.bedtimeBlocks - block
+            saveSettings { it.copy(bedtimeBlocks = updated) }
+        } else {
+            updateActiveChild { child ->
+                child.copy(bedtimeBlocks = child.bedtimeBlocks - block)
+            }
+        }
+    }
+
+
+    suspend fun clearAllBedtimeBlocks() {
+        if (appSettings.value.accountMode == "Parent") {
+            saveSettings { it.copy(bedtimeBlocks = emptyList()) }
+        } else {
+            updateActiveChild { child -> child.copy(bedtimeBlocks = emptyList()) }
+        }
+    }
+
 
 
     // ✅ ACCOUNT INFO
@@ -290,6 +371,24 @@ class DataStoreManager(private val context: Context) {
             }
         }
     }
+
+    suspend fun removeAppTimeLimit(packageName: String) {
+        if (appSettings.value.accountMode == "Parent") {
+            val settings = appSettings.value
+            val updatedLimits = settings.parentAppTimeLimits.toMutableMap().apply {
+                remove(packageName) // completely delete entry
+            }
+            saveSettings { settings.copy(parentAppTimeLimits = updatedLimits) }
+        } else {
+            updateActiveChild {
+                val updatedLimits = it.appTimeLimits.toMutableMap().apply {
+                    remove(packageName) // completely delete entry
+                }
+                it.copy(appTimeLimits = updatedLimits)
+            }
+        }
+    }
+
 
     // ✅ ------------------- INSTAGRAM BLOCKING -------------------
     suspend fun setInstagramReelsBlocked(enabled: Boolean) =

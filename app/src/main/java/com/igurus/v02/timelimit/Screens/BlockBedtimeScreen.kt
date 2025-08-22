@@ -96,19 +96,27 @@ fun BlockBedtimeScreen(
 
         // Save Button
         // Save Button
+        // Save Button
         Button(
             onClick = {
-                // Convert selected times into strings (HH:mm format)
-                val startTime = "%02d:%02d".format(startHour, startMinute)
-                val endTime = "%02d:%02d".format(endHour, endMinute)
-
-                // Create BedtimeBlock object
+                // Create BedtimeBlock object with hour & minute
                 val bedtime = BedtimeBlock(
-                    start = startTime,
-                    end = endTime
+                    packageName = packageName,
+                    startHour = startHour,
+                    startMinute = startMinute,
+                    endHour = endHour,
+                    endMinute = endMinute
                 )
 
-                //viewModel.setBedtimeBlocks(packageName, bedtime)
+                // Save to ViewModel
+                viewModel.setBedtimeBlock(
+                    packageName = packageName,
+                    startHour = startHour,
+                    startMinute = startMinute,
+                    endHour = endHour,
+                    endMinute = endMinute
+                )
+
                 navController.popBackStack()
             },
             modifier = Modifier.fillMaxWidth(),

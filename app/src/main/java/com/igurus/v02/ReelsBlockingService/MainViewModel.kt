@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
+
     private val dataStoreManager = DataStoreManager(application)
 
     // ✅ ------------------- ACCOUNT INFO -------------------
@@ -146,6 +147,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             dataStoreManager.setAppPermanentlyBlocked(packageName, isBlocked)
         }
     }
+
+    // ✅ ------------------- BEDTIME BLOCKING -------------------
+
+    // ------------------- BEDTIME BLOCKING -------------------
+
+    // ------------------- BEDTIME BLOCKING -------------------
+
+    fun setBedtimeBlock(
+        packageName: String,
+        startHour: Int,
+        startMinute: Int,
+        endHour: Int,
+        endMinute: Int
+    ) = viewModelScope.launch {
+        dataStoreManager.addBedtimeBlock(
+            packageName,
+            startHour,
+            startMinute,
+            endHour,
+            endMinute
+        )
+    }
+
+    fun removeAppTimeLimit(packageName: String) {
+        viewModelScope.launch {
+            dataStoreManager.removeAppTimeLimit(packageName)
+        }
+    }
+
+    fun removeBedtimeBlock(block: BedtimeBlock) = viewModelScope.launch {
+        dataStoreManager.removeBedtimeBlock(block)
+    }
+
+    fun isAppBlockedInBedtime(packageName: String, currentHour: Int, currentMinute: Int): Boolean {
+        val blocks = bedtimeBlocks.value
+        return blocks.any { block ->
+            block.packageName == packageName &&
+                    isWithinTimeRange(
+                        currentHour,
+                        currentMinute,
+                        block.startHour,
+                        block.startMinute,
+                        block.endHour,
+                        block.endMinute
+                    )
+        }
+    }
+
+    private fun isWithinTimeRange(
+        currentHour: Int,
+        currentMinute: Int,
+        startHour: Int,
+        startMinute: Int,
+        endHour: Int,
+        endMinute: Int
+    ): Boolean {
+        val currentMinutes = currentHour * 60 + currentMinute
+        val startMinutes = startHour * 60 + startMinute
+        val endMinutes = endHour * 60 + endMinute
+
+        return if (startMinutes < endMinutes) {
+            currentMinutes in startMinutes until endMinutes
+        } else {
+            // Spans midnight (e.g. 22:00–06:00)
+            currentMinutes >= startMinutes || currentMinutes < endMinutes
+        }
+    }
+
 
     // ✅ ------------------- CURRENT APP STATE HELPERS -------------------
     private val currentInstagram: Flow<App> = appSettings.map {
